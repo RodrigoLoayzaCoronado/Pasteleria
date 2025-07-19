@@ -21,3 +21,4 @@ module.exports = router;
 
 //falta comprobar si la demas rutas funcionan correctamente
 //create funciona bien 
+//comparar los archivos cotizacionCotnroller.js desarrollado y el cotizacionesController.js de depseek y desarrollar el frontend
