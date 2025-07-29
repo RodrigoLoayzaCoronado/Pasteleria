@@ -1235,6 +1235,107 @@ const getItemsCotizacionByQuery = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al buscar ítems de cotización', error: error.message });
   }
 };
+const searchClientes = async (req, res) => {
+  const { query } = req.query;
+  try {
+    const clientes = await Cliente.findAll({
+      where: {
+        [Op.or]: [
+          { nombre: { [Op.iLike]: `%${query}%` } },
+          { telefono: { [Op.iLike]: `%${query}%` } }
+        ]
+      },
+      include: [
+        {
+          model: Cotizacion,
+          as: 'cotizaciones',
+          include: [
+            { model: ItemCotizacion, as: 'items', include: [
+              { model: TortaCompleta, as: 'detalleTorta' },
+              { model: MiniTorta, as: 'miniTorta' },
+              { model: Postre, as: 'postre' },
+              { model: OtrosProductos, as: 'otroProducto' }
+            ]}
+          ],
+          order: [['creado_en', 'DESC']],
+          limit: 5 // Últimas cotizaciones
+        }
+      ]
+    });
+    res.json(clientes);
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al buscar clientes', error: error.message });
+  }
+};
+const previewCotizacion = async (req, res) => {
+  const { items } = req.body;
+  try {
+    let total = 0;
+    for (const item of items) {
+      if (item.tipo_producto === 'torta' && item.detalle_torta_data) {
+        const precio = await calculateDetalleTortaTotalPrice(item.detalle_torta_data, null);
+        total += precio * (parseFloat(item.cantidad) || 1);
+      } else if (['mini_torta', 'postre', 'otro_producto'].includes(item.tipo_producto)) {
+        const model = item.tipo_producto === 'mini_torta' ? MiniTorta : item.tipo_producto === 'postre' ? Postre : OtrosProductos;
+        const producto = await model.findByPk(item.id_producto_catalogo);
+        total += (parseFloat(producto?.precio || 0) * (parseFloat(item.cantidad) || 1));
+      }
+    }
+    res.json({ total });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al calcular previsualización', error: error.message });
+  }
+};
+const PDFDocument = require('pdfkit');
+const getCotizacionPDF = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const cotizacion = await Cotizacion.findByPk(id, {
+      include: [
+        { model: Cliente, as: 'cliente' },
+        { model: Sucursal, as: 'sucursal' },
+        { model: ItemCotizacion, as: 'items', include: [
+          { model: TortaCompleta, as: 'detalleTorta', include: [
+            { model: TortaBase, as: 'tortaBase' },
+            { model: Cobertura, as: 'cobertura' },
+            { model: Decoracion, as: 'decoracionPrincipal' },
+            { model: ElementoDecorativoPorTorta, as: 'elementosDecorativos', include: [{ model: ElementoDecorativo, as: 'elementoDecorativo' }] },
+            { model: ExtraPorTorta, as: 'extras', include: [{ model: Extra, as: 'extra' }] },
+            { model: DecoracionPorTorta, as: 'decoracionesAdicionales', include: [{ model: Decoracion, as: 'decoracion' }] }
+          ]},
+          { model: MiniTorta, as: 'miniTorta' },
+          { model: Postre, as: 'postre' },
+          { model: OtrosProductos, as: 'otroProducto' }
+        ]}
+      ]
+    });
+    if (!cotizacion) return res.status(404).json({ mensaje: 'Cotización no encontrada' });
+
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=cotizacion-${cotizacion.numero_cotizacion}.pdf`);
+    doc.pipe(res);
+
+    doc.fontSize(16).text(`Cotización #${cotizacion.numero_cotizacion}`, 50, 50);
+    doc.fontSize(12).text(`Cliente: ${cotizacion.cliente.nombre} (${cotizacion.cliente.celular})`, 50, 80);
+    doc.text(`Sucursal: ${cotizacion.sucursal?.nombre || 'N/A'}`, 50, 100);
+    doc.text(`Fecha: ${cotizacion.fecha_evento || 'N/A'}`, 50, 120);
+    doc.text('Productos:', 50, 140);
+    cotizacion.items.forEach((item, index) => {
+      const nombre = item.nombre_producto || (item.detalleTorta ? `Torta personalizada #${item.detalleTorta.id}` : item.miniTorta?.nombre || item.postre?.nombre || item.otroProducto?.nombre);
+      doc.text(`${index + 1}. ${nombre} (x${item.cantidad}) - $${item.precio_total}`, 50, 160 + index * 20);
+      if (item.detalleTorta) {
+        doc.text(`   Base: ${item.detalleTorta.tortaBase?.nombre || 'N/A'}`, 60, 180 + index * 20);
+        doc.text(`   Cobertura: ${item.detalleTorta.cobertura?.nombre || 'N/A'}`, 60, 200 + index * 20);
+        doc.text(`   Decoraciones: ${item.detalleTorta.elementosDecorativos.map(e => `${e.elementoDecorativo.nombre} x${e.cantidad}`).join(', ') || 'N/A'}`, 60, 220 + index * 20);
+      }
+    });
+    doc.text(`Total: $${cotizacion.total}`, 50, 160 + cotizacion.items.length * 20 + 20);
+    doc.end();
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al generar PDF', error: error.message });
+  }
+};
 module.exports = {
   createCotizacion,
   getAllCotizaciones,
@@ -1245,5 +1346,8 @@ module.exports = {
   updateItemInCotizacion,
   removeItemFromCotizacion,
   searchCotizacionesByTortaName,
-  getItemsCotizacionByQuery
+  getItemsCotizacionByQuery,
+  searchClientes,
+  previewCotizacion,
+  getCotizacionPDF
 };

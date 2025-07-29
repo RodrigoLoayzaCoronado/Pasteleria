@@ -1,8 +1,15 @@
 const express = require('express');
 const app = express();
 const sequelize = require('./config/database');
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'; // URL del frontend
 require('dotenv').config();
 require('./models'); // Cargar relaciones
+const cors = require('cors');
+app.use(cors({
+  origin: frontendUrl,
+  credentials: true,
+}));
+
 
 const authRoutes = require('./routes/authRoutes');
 const sucursalRoutes = require('./routes/sucursalRoutes');

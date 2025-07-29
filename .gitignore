@@ -1,0 +1,14 @@
+#ingnorar .env
+.env   
+#ignorar node_modules
+node_modules/
+#ignorar logs
+logs/
+#ignorar archivos de log
+*.log
+#ignorar archivos de caché
+.cache
+#ignorar archivos de configuración de IDE
+.idea/
+#ignorar archivos de configuración de Visual Studio Code
+.vscode/

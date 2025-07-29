@@ -11,6 +11,9 @@ router.put('/:id',authMiddleware,restrictTo('administrador','operador'), cotizac
 router.put('/:id/status',authMiddleware,restrictTo('administrador','operador'), cotizacionController.updateCotizacionStatus);
 router.get('/buscar', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.searchCotizacionesByTortaName);
 router.get('/items', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.getItemsCotizacionByQuery);
+router.get('/clientes', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.searchClientes);
+router.get('/preview/:id', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.previewCotizacion);
+router.get('/pdf/:id', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.getCotizacionPDF);
 //router.delete('/:id', authMiddleware, restrictTo('administrador', 'operador'), cotizacionController.deleteCotizacion);
 // Rutas para ítems de Cotización (anidadas)
 router.post('/:id/items',authMiddleware,restrictTo('administrador','operador'), cotizacionController.addItemToCotizacion); // :id es cotizacionId
