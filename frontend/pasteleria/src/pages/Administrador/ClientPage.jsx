@@ -1,89 +1,278 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import DataTable from '../../components/DataTable';
+import { useEffect, useState } from 'react';
+import { useClientes } from '../../hooks/useClientes';
+import ClientHeader from '../../components/client/ClientHeader';
+import ClientStats from '../../components/client/ClientState';
+import ClientFilters from '../../components/client/ClientFilters';
+import ClientTable from '../../components/client/ClientTables';
+import ClientModal from '../../components/client/ClientModal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Toast from '../../components/ui/Toast';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ErrorState from '../../components/ui/ErrorState';
 
 const ClientPage = () => {
-  const [clients, setClients] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  const {
+    clientes,
+    loading,
+    error,
+    getClientes,
+    addCliente,
+    editCliente,
+    suspenderCliente,
+    activeCliente,
+    buscarClientes,
+    eliminarCliente
+  } = useClientes();
 
+  // Estados del componente
+  const [showForm, setShowForm] = useState(false);
+  const [editingCliente, setEditingCliente] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredClientes, setFilteredClientes] = useState([]);
+  const [verTodos, setVerTodos] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  // Cargar clientes al montar el componente
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const response = await axios.get('http://localhost:3000/api/clientes/listar', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        });
-        setClients(response.data);
-      } catch (err) {
-        setError('Error al cargar los clientes');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchClients();
+    getClientes();
   }, []);
 
-  const handleCreateClient = async (newClient) => {
-    try {
-      const response = await axios.post('http://localhost:3000/api/clientes/crear', newClient, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      setClients([...clients, response.data]);
-    } catch (err) {
-      setError('Error al crear el cliente');
+  // Actualizar clientes filtrados
+  useEffect(() => {
+    if (!clientes || !Array.isArray(clientes)) {
+      setFilteredClientes([]);
+      return;
+    }
+    
+    const filtered = verTodos 
+      ? clientes 
+      : clientes.filter(cliente => cliente && cliente.activo !== false);
+    
+    setFilteredClientes(filtered);
+  }, [clientes, verTodos]);
+
+  // Mostrar toast
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // Manejar búsqueda
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      try {
+        const results = await buscarClientes(query);
+        const filtered = verTodos 
+          ? results 
+          : results.filter(c => c && c.activo !== false);
+        setFilteredClientes(filtered);
+      } catch (err) {
+        showToast('Error al buscar clientes', 'error');
+      }
+    } else {
+      const filtered = verTodos 
+        ? clientes 
+        : clientes.filter(c => c && c.activo !== false);
+      setFilteredClientes(filtered);
     }
   };
 
-  const columns = [
-    { header: 'ID', accessor: 'id' },
-    { header: 'Nombre', accessor: 'nombre' },
-    { header: 'Teléfono', accessor: 'telefono' },
-    { header: 'Acciones', accessor: 'actions', render: (client) => (
-      <button className="text-red-500 hover:text-red-700">Suspender</button>
-    ) },
-  ];
+  // Manejar creación de cliente
+  const handleCreate = () => {
+    setEditingCliente(null);
+    setShowForm(true);
+  };
+
+  // Manejar edición de cliente
+  const handleEdit = (cliente) => {
+    setEditingCliente(cliente);
+    setShowForm(true);
+  };
+
+  // Manejar envío del formulario
+  const handleFormSubmit = async (clienteData) => {
+    try {
+      let result;
+      
+      if (editingCliente) {
+        result = await editCliente(editingCliente.id, clienteData);
+      } else {
+        result = await addCliente(clienteData);
+      }
+
+      if (result.success) {
+        setShowForm(false);
+        setEditingCliente(null);
+        showToast(
+          editingCliente 
+            ? 'Cliente actualizado exitosamente' 
+            : 'Cliente creado exitosamente'
+        );
+        
+        // Recargar datos si hay búsqueda activa
+        if (searchQuery.trim()) {
+          handleSearch(searchQuery);
+        }
+      } else {
+        showToast(result.message || 'Error al guardar cliente', 'error');
+      }
+    } catch (err) {
+      showToast('Error inesperado al guardar cliente', 'error');
+    }
+  };
+
+  // Manejar suspensión de cliente
+  const handleSuspend = (cliente) => {
+    setConfirmDialog({
+      title: 'Suspender Cliente',
+      message: `¿Estás seguro de que deseas suspender a ${cliente.nombre}?`,
+      confirmText: 'Suspender',
+      confirmVariant: 'warning',
+      onConfirm: async () => {
+        try {
+          const result = await suspenderCliente(cliente.id);
+          if (result.success) {
+            showToast('Cliente suspendido exitosamente');
+            if (searchQuery.trim()) {
+              handleSearch(searchQuery);
+            }
+          } else {
+            showToast(result.message || 'Error al suspender cliente', 'error');
+          }
+        } catch (err) {
+          showToast('Error inesperado al suspender cliente', 'error');
+        }
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  // Manejar activación de cliente
+  const handleActivate = (cliente) => {
+    setConfirmDialog({
+      title: 'Activar Cliente',
+      message: `¿Estás seguro de que deseas activar a ${cliente.nombre}?`,
+      confirmText: 'Activar',
+      confirmVariant: 'success',
+      onConfirm: async () => {
+        try {
+          const result = await activeCliente(cliente.id);
+          if (result.success) {
+            showToast('Cliente activado exitosamente');
+            if (searchQuery.trim()) {
+              handleSearch(searchQuery);
+            }
+          } else {
+            showToast(result.message || 'Error al activar cliente', 'error');
+          }
+        } catch (err) {
+          showToast('Error inesperado al activar cliente', 'error');
+        }
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  // Manejar eliminación de cliente
+  const handleDelete = (cliente) => {
+    setConfirmDialog({
+      title: 'Eliminar Cliente',
+      message: `¿Estás seguro de que deseas eliminar permanentemente a ${cliente.nombre}? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          const result = await eliminarCliente(cliente.id);
+          if (result.success) {
+            showToast('Cliente eliminado exitosamente');
+            if (searchQuery.trim()) {
+              handleSearch(searchQuery);
+            }
+          } else {
+            showToast(result.message || 'Error al eliminar cliente', 'error');
+          }
+        } catch (err) {
+          showToast('Error inesperado al eliminar cliente', 'error');
+        }
+        setConfirmDialog(null);
+      },
+      onCancel: () => setConfirmDialog(null)
+    });
+  };
+
+  // Estados de carga y error
+  if (loading && !clientes.length) {
+    return <LoadingSpinner message="Cargando clientes..." />;
+  }
+
+  if (error && !clientes.length) {
+    return (
+      <ErrorState 
+        title="Error al cargar clientes"
+        message={error}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold text-marron-chocolate mb-4">Gestión de Clientes</h1>
-      {error && <p className="text-red-500">{error}</p>}
-      {loading ? (
-        <p>Cargando...</p>
-      ) : (
-        <DataTable columns={columns} data={clients} />
-      )}
-      <div className="mt-6">
-        <h2 className="text-lg font-semibold text-marron-chocolate mb-2">Crear Cliente</h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const nombre = e.target.nombre.value;
-            const telefono = e.target.telefono.value;
-            handleCreateClient({ nombre, telefono });
-            e.target.reset();
-          }}
-          className="space-y-4"
-        >
-          <input
-            type="text"
-            name="nombre"
-            placeholder="Nombre"
-            className="w-full px-4 py-2 rounded-xl border-2 border-beige focus:border-pink-principal"
-            required
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <ClientHeader onCreateClick={handleCreate} />
+        
+        {/* Stats */}
+        <ClientStats clientes={clientes} />
+        
+        {/* Filters */}
+        <ClientFilters
+          searchQuery={searchQuery}
+          onSearch={handleSearch}
+          verTodos={verTodos}
+          onToggleVerTodos={setVerTodos}
+        />
+        
+        {/* Table */}
+        <ClientTable
+          clientes={filteredClientes}
+          loading={loading}
+          searchQuery={searchQuery}
+          onEdit={handleEdit}
+          onSuspend={handleSuspend}
+          onActivate={handleActivate}
+          onDelete={handleDelete}
+        />
+        
+        {/* Modal */}
+        {showForm && (
+          <ClientModal
+            cliente={editingCliente}
+            onSubmit={handleFormSubmit}
+            onClose={() => {
+              setShowForm(false);
+              setEditingCliente(null);
+            }}
+            loading={loading}
           />
-          <input
-            type="text"
-            name="telefono"
-            placeholder="Teléfono"
-            className="w-full px-4 py-2 rounded-xl border-2 border-beige focus:border-pink-principal"
+        )}
+        
+        {/* Confirm Dialog */}
+        {confirmDialog && (
+          <ConfirmDialog {...confirmDialog} />
+        )}
+        
+        {/* Toast */}
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
           />
-          <button
-            type="submit"
-            className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-pink-principal to-marron-chocolate text-white hover:shadow-xl"
-          >
-            Crear
-          </button>
-        </form>
+        )}
       </div>
     </div>
   );

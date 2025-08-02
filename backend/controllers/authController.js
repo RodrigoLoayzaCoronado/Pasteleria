@@ -48,7 +48,12 @@ const login = async (req, res) => {
     res.json({
       mensaje: 'Inicio de sesión exitoso',
       token,
-      usuario: { id: usuario.id, nombre: usuario.nombre, rol: usuario.rol }
+      usuario: { 
+        id: usuario.id, 
+        nombre: usuario.nombre, 
+        rol: usuario.rol,
+        id_sucursal:usuario.id_sucursal ? usuario.id_sucursal : null // Aseguramos que id_sucursal sea null si no existe
+       }
     });
   } catch (error) {
     res.status(500).json({ mensaje: 'Error en el servidor', error: error.message });

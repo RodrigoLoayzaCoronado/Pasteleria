@@ -12,7 +12,7 @@ const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const { login } = useContext(AuthContext);
+  const { login } = useContext(AuthContext); // Obtener la función login del contexto
   const navigate = useNavigate();
 
   // Validación en tiempo real
@@ -32,7 +32,11 @@ const LoginForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password || emailError || passwordError || password.length < 6) return;
+    // Validar antes de enviar
+    if (!email || !password || emailError || passwordError || password.length < 6) {
+      setError('Por favor, completa todos los campos correctamente.');
+      return;
+    }
 
     setIsLoading(true);
     setError('');
@@ -43,13 +47,19 @@ const LoginForm = () => {
         contrasena: password,
       });
       const { token, usuario } = response.data;
-      login(token, { ...usuario, id_sucursal: usuario.id_sucursal });
+
+      // Llamar a la función login del contexto con el token y el objeto usuario completo
+      // No necesitas desestructurar y reestructurar si 'usuario' ya viene completo del backend
+      await login(token, usuario); // Asegúrate de que 'usuario' contenga 'id_sucursal' del backend
+
+      // Redirección basada en el rol del usuario
       if (usuario.rol === 'administrador') {
         navigate('/admin/dashboard');
       } else if (usuario.rol === 'operador') {
-        navigate('/operador/clientes');
+        navigate('/operador/clientes'); // O la ruta por defecto para operadores
       }
     } catch (err) {
+      // console.error('Error en el login:', err); // Para depuración
       setError(err.response?.data?.mensaje || 'Error en el servidor. Por favor intenta nuevamente.');
     } finally {
       setIsLoading(false);

@@ -15,8 +15,9 @@ const DataTable = ({ columns, data }) => {
           <tr key={rowIndex} className="border-t border-beige hover:bg-beige">
             {columns.map((col, colIndex) => (
               <td key={colIndex} className="p-2">
-                {col.render ? col.render(row) : row[col.accessor]}
+                {col.render ? col.render(null, row) : row[col.key]}
               </td>
+
             ))}
           </tr>
         ))}

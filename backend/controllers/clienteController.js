@@ -4,7 +4,7 @@ const Cotizacion = require('../models/cotizacion');
 
 const getAllClientes = async (req, res) => {
   try {
-    const clientes = await Cliente.findAll({ where: { activo: true } });
+    const clientes = await Cliente.findAll();
     res.json(clientes);
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener clientes', error: error.message });
@@ -13,7 +13,6 @@ const getAllClientes = async (req, res) => {
 
 const getClienteById = async (req, res) => {
   const { id } = req.params;
-
   try {
     const cliente = await Cliente.findOne({ where: { id, activo: true } });
     if (!cliente) {
@@ -71,11 +70,13 @@ const suspendCliente = async (req, res) => {
     }
 
     await cliente.update({ activo: false });
-    res.json({ mensaje: 'Cliente suspendido exitosamente' });
+    // ***** CAMBIO AQUÍ *****
+    res.json(cliente); // Devuelve el objeto cliente actualizado
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al suspender el cliente', error: error.message });
   }
 };
+
 
 const searchClientes = async (req, res) => {
   const { q } = req.query;
@@ -115,6 +116,37 @@ const getClienteCotizaciones = async (req, res) => {
     res.status(500).json({ mensaje: 'Error al obtener las cotizaciones', error: error.message });
   }
 };
+const activateCliente = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const cliente = await Cliente.findOne({ where: { id, activo: false } });
+        if (!cliente) {
+            // Si el cliente no se encuentra O ya está activo
+            return res.status(404).json({ mensaje: 'Cliente no encontrado o ya activo' });
+        }
+        await cliente.update({ activo: true });
+        res.json(cliente); // Asegúrate de que esto devuelve el objeto completo
+    } catch (error) {
+        res.status(500).json({ mensaje: 'Error al activar el cliente', error: error.message });
+    }
+};
+
+const deleteCliente = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const cliente = await Cliente.findByPk(id);
+    if (!cliente) {
+      return res.status(404).json({ mensaje: 'Cliente no encontrado' });
+    }
+
+    await cliente.destroy();
+    res.json({ mensaje: 'Cliente eliminado permanentemente' });
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al eliminar el cliente', error: error.message });
+  }
+};
+
 
 module.exports = {
   getAllClientes,
@@ -123,5 +155,7 @@ module.exports = {
   updateCliente,
   suspendCliente,
   searchClientes,
-  getClienteCotizaciones
+  getClienteCotizaciones,
+  activateCliente,
+  deleteCliente
 };
